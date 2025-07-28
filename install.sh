@@ -205,13 +205,15 @@ const puppeteer = require('puppeteer');
     const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-    await page.waitForTimeout(10000);
+    // Wait 5s, then click a random element (if any)
+    await new Promise(r => setTimeout(r, 5000));
     const elements = await page.$$('*');
     if (elements.length) {
         const randIdx = Math.floor(Math.random() * elements.length);
         await elements[randIdx].click().catch(()=>{});
     }
-    await page.waitForTimeout(20000);
+    // Wait another 25s (total 30s after page load)
+    await new Promise(r => setTimeout(r, 25000));
     await browser.close();
     console.log(new Date().toISOString() + " | Visited " + url + " and clicked.");
 })();
