@@ -24,17 +24,45 @@ curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt update
 sudo apt install -y nodejs
 
-echo "=== [3] Install other dependencies ==="
+echo "=== [3] Install all Chromium & Puppeteer dependencies ==="
+sudo apt install -y \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libpango-1.0-0 \
+    libx11-xcb1 \
+    libxcb-dri3-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    xdg-utils \
+    libasound2 \
+    libnss3 \
+    libxshmfence1 \
+    libxss1 \
+    libxtst6 \
+    fonts-liberation \
+    libappindicator3-1 \
+    libu2f-udev \
+    libvulkan1 \
+    libwayland-client0 \
+    libwayland-egl1 \
+    libwayland-server0
+
+echo "=== [4] Install other dependencies ==="
 sudo apt install -y openvpn apache2 php php-cli php-zip curl git
 
-echo "=== [4] Setup panel and Puppeteer cache dir ==="
+echo "=== [5] Setup panel and Puppeteer cache dir ==="
 sudo mkdir -p "$PANEL_DIR"
 sudo chown $USER:$USER "$PANEL_DIR"
 cd "$PANEL_DIR"
 mkdir -p "$CACHE_DIR"
 sudo chown -R www-data:www-data "$CACHE_DIR"
 
-echo "=== [5] Write admin.php ==="
+echo "=== [6] Write admin.php ==="
 cat > admin.php <<'EOF'
 <?php
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -105,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </html>
 EOF
 
-echo "=== [6] Write start.php ==="
+echo "=== [7] Write start.php ==="
 cat > start.php <<'EOF'
 <?php
 $settings = json_decode(file_get_contents('settings.json'), true);
@@ -119,7 +147,7 @@ for ($i = 0; $i < $settings['visits']; $i++) {
 ?>
 EOF
 
-echo "=== [7] Write run_visit.sh ==="
+echo "=== [8] Write run_visit.sh ==="
 cat > run_visit.sh <<'EOF'
 #!/bin/bash
 export PATH=$PATH:/usr/bin:/usr/local/bin
@@ -167,7 +195,7 @@ EOF
 
 chmod +x run_visit.sh
 
-echo "=== [8] Write puppeteer_visit.js ==="
+echo "=== [9] Write puppeteer_visit.js ==="
 cat > puppeteer_visit.js <<'EOF'
 const puppeteer = require('puppeteer');
 (async () => {
@@ -189,19 +217,19 @@ const puppeteer = require('puppeteer');
 })();
 EOF
 
-echo "=== [9] Set permissions and initial files ==="
+echo "=== [10] Set permissions and initial files ==="
 mkdir -p vpn_configs
 touch visit.log
 touch settings.json
 sudo chown -R www-data:www-data "$PANEL_DIR"
 chmod -R 755 "$PANEL_DIR"
 
-echo "=== [10] Install Puppeteer and force Chromium download ==="
+echo "=== [11] Install Puppeteer and force Chromium download ==="
 export PUPPETEER_CACHE_DIR=$CACHE_DIR
 npm install puppeteer --force
 npx puppeteer browsers install chrome
 
-echo "=== [11] Start apache2 ==="
+echo "=== [12] Start apache2 ==="
 sudo systemctl start apache2
 
 echo
