@@ -1,23 +1,20 @@
 #!/bin/bash
-
-# For Ubuntu 22.04
+# === OpenVPN Auto Visit Panel Installer for Ubuntu 22.04 ===
 
 set -e
 
-echo "=== Updating system and installing dependencies ==="
-sudo apt update
-sudo apt install -y openvpn apache2 php php-cli php-zip curl nodejs npm git
-
 PANEL_DIR="/var/www/html/vpn-visit-panel"
 
-echo "=== Creating panel directory at $PANEL_DIR ==="
+echo "=== Updating and Installing Requirements ==="
+sudo apt update
+sudo apt install -y openvpn apache2 php php-cli php-zip curl nodejs npm
+
+echo "=== Creating project folder at $PANEL_DIR ==="
 sudo mkdir -p "$PANEL_DIR"
 sudo chown $USER:$USER "$PANEL_DIR"
-
 cd "$PANEL_DIR"
 
-echo "=== Creating main files... ==="
-
+echo "=== Creating admin.php ==="
 cat > admin.php <<'EOF'
 <?php
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -44,8 +41,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html>
 <head>
     <title>VPN Auto Visit Panel</title>
-    <meta http-equiv="refresh" content="10">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script>
+    window.onload = function() {
+        function updateLog() {
+            fetch('visit.log?'+Math.random()).then(res=>res.text()).then(txt=>{
+                document.getElementById('progress_log').innerText = txt;
+            });
+        }
+        updateLog();
+        setInterval(updateLog, 5000);
+    }
+    </script>
 </head>
 <body class="container mt-4">
     <h2>VPN Auto Visit Panel</h2>
@@ -73,11 +80,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <button class="btn btn-primary">Start Visits</button>
     </form>
     <h4>Progress</h4>
-    <pre style="background:#eee;padding:1em;max-height:300px;overflow:auto;"><?php if(file_exists('visit.log')) echo htmlspecialchars(file_get_contents('visit.log')); ?></pre>
+    <pre id="progress_log" style="background:#eee;padding:1em;max-height:300px;overflow:auto;"></pre>
 </body>
 </html>
 EOF
 
+echo "=== Creating start.php ==="
 cat > start.php <<'EOF'
 <?php
 $settings = json_decode(file_get_contents('settings.json'), true);
@@ -91,6 +99,7 @@ for ($i = 0; $i < $settings['visits']; $i++) {
 ?>
 EOF
 
+echo "=== Creating run_visit.sh ==="
 cat > run_visit.sh <<'EOF'
 #!/bin/bash
 CONFIG="$1"
@@ -129,6 +138,7 @@ EOF
 
 chmod +x run_visit.sh
 
+echo "=== Creating puppeteer_visit.js ==="
 cat > puppeteer_visit.js <<'EOF'
 const puppeteer = require('puppeteer');
 (async () => {
@@ -150,16 +160,18 @@ const puppeteer = require('puppeteer');
 })();
 EOF
 
-echo "=== Creating required directories and setting permissions ==="
+echo "=== Preparing configs and permissions ==="
 mkdir -p vpn_configs
 touch visit.log
 touch settings.json
 sudo chown -R www-data:www-data "$PANEL_DIR"
 chmod -R 755 "$PANEL_DIR"
 
-echo "=== Installing Node puppeteer module ==="
+echo "=== Installing puppeteer (node module) ==="
 npm install puppeteer
 
-echo "=== All done! ==="
-echo "Open in browser: http://<YOUR-VPS-IP>/vpn-visit-panel/admin.php"
-echo "Upload .ovpn files, fill the form, and GO!"
+echo
+echo "=== INSTALLATION COMPLETE ==="
+echo "Go to: http://<YOUR-VPS-IP>/vpn-visit-panel/admin.php"
+echo "Upload .ovpn files, fill the form, and track live progress!"
+echo
