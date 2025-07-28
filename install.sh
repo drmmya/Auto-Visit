@@ -1,29 +1,33 @@
 #!/bin/bash
-# === OpenVPN Auto Visit Panel Full Installer for Ubuntu 22.04 ===
 set -e
 
 PANEL_DIR="/var/www/html/vpn-visit-panel"
 
-echo "=== Updating and Installing Requirements ==="
+echo "=== [1] REMOVE old Node.js, npm, and libnode-dev ==="
+sudo systemctl stop apache2 || true
+
+sudo apt remove --purge -y nodejs npm libnode-dev nodejs-doc || true
+sudo apt autoremove -y
+sudo rm -rf /usr/local/bin/node /usr/local/bin/npm /usr/include/node /usr/lib/node_modules
+
+echo "=== [2] Fix any dpkg/apt issues ==="
+sudo dpkg --configure -a
+sudo apt -f install -y
+
+echo "=== [3] Install Node.js v18 LTS (clean) ==="
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt update
+sudo apt install -y nodejs
+
+echo "=== [4] Install other dependencies ==="
 sudo apt install -y openvpn apache2 php php-cli php-zip curl git
 
-# --------- Install Node.js v18 LTS ---------
-if ! node -v 2>/dev/null | grep -q 'v18.'; then
-    echo "=== Installing Node.js v18 LTS ==="
-    sudo apt remove -y nodejs || true
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt install -y nodejs
-else
-    echo "Node.js 18.x already installed: $(node -v)"
-fi
-
-echo "=== Creating project folder at $PANEL_DIR ==="
+echo "=== [5] Create panel directory ==="
 sudo mkdir -p "$PANEL_DIR"
 sudo chown $USER:$USER "$PANEL_DIR"
 cd "$PANEL_DIR"
 
-echo "=== Creating admin.php ==="
+echo "=== [6] Write admin.php ==="
 cat > admin.php <<'EOF'
 <?php
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -94,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </html>
 EOF
 
-echo "=== Creating start.php ==="
+echo "=== [7] Write start.php ==="
 cat > start.php <<'EOF'
 <?php
 $settings = json_decode(file_get_contents('settings.json'), true);
@@ -108,7 +112,7 @@ for ($i = 0; $i < $settings['visits']; $i++) {
 ?>
 EOF
 
-echo "=== Creating run_visit.sh ==="
+echo "=== [8] Write run_visit.sh ==="
 cat > run_visit.sh <<'EOF'
 #!/bin/bash
 CONFIG="$1"
@@ -147,7 +151,7 @@ EOF
 
 chmod +x run_visit.sh
 
-echo "=== Creating puppeteer_visit.js ==="
+echo "=== [9] Write puppeteer_visit.js ==="
 cat > puppeteer_visit.js <<'EOF'
 const puppeteer = require('puppeteer');
 (async () => {
@@ -169,18 +173,22 @@ const puppeteer = require('puppeteer');
 })();
 EOF
 
-echo "=== Preparing configs and permissions ==="
+echo "=== [10] Create configs, permissions ==="
 mkdir -p vpn_configs
 touch visit.log
 touch settings.json
 sudo chown -R www-data:www-data "$PANEL_DIR"
 chmod -R 755 "$PANEL_DIR"
 
-echo "=== Installing puppeteer (node module) ==="
+echo "=== [11] Install puppeteer (node module) ==="
 npm install puppeteer
 
+echo "=== [12] Start apache2 ==="
+sudo systemctl start apache2
+
 echo
-echo "=== INSTALLATION COMPLETE ==="
+echo "=== ALL DONE! ==="
 echo "Go to: http://<YOUR-VPS-IP>/vpn-visit-panel/admin.php"
-echo "Upload .ovpn files, fill the form, and track live progress!"
+echo "Upload .ovpn files, fill the form, and GO!"
 echo
+
