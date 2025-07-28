@@ -3,23 +3,27 @@ set -e
 
 PANEL_DIR="/var/www/html/vpn-visit-panel"
 
-echo "=== [1] REMOVE old Node.js, npm, and libnode-dev ==="
-sudo systemctl stop apache2 || true
-
+echo "=== [1] Fix dpkg, purge ALL Ubuntu nodejs/npm/libnode-dev ==="
+sudo pkill -9 node || true
+sudo pkill -9 npm || true
+sudo pkill -9 openvpn || true
 sudo apt remove --purge -y nodejs npm libnode-dev nodejs-doc || true
+sudo dpkg --purge nodejs npm libnode-dev nodejs-doc || true
 sudo apt autoremove -y
-sudo rm -rf /usr/local/bin/node /usr/local/bin/npm /usr/include/node /usr/lib/node_modules
-
-echo "=== [2] Fix any dpkg/apt issues ==="
+sudo rm -rf /usr/include/node /usr/lib/node_modules /usr/local/bin/node* /usr/local/bin/npm* /usr/local/lib/node* /usr/share/doc/nodejs
+sudo rm -rf /var/lib/dpkg/info/nodejs* /var/lib/dpkg/info/libnode-dev*
 sudo dpkg --configure -a
 sudo apt -f install -y
 
-echo "=== [3] Install Node.js v18 LTS (clean) ==="
+echo "=== [2] Hold Ubuntu's libnode-dev forever ==="
+sudo apt-mark hold libnode-dev
+
+echo "=== [3] Install Node.js v18 from NodeSource only ==="
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt update
 sudo apt install -y nodejs
 
-echo "=== [4] Install other dependencies ==="
+echo "=== [4] Install all other dependencies ==="
 sudo apt install -y openvpn apache2 php php-cli php-zip curl git
 
 echo "=== [5] Create panel directory ==="
@@ -191,4 +195,3 @@ echo "=== ALL DONE! ==="
 echo "Go to: http://<YOUR-VPS-IP>/vpn-visit-panel/admin.php"
 echo "Upload .ovpn files, fill the form, and GO!"
 echo
-
