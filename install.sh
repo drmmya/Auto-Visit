@@ -1,13 +1,22 @@
 #!/bin/bash
-# === OpenVPN Auto Visit Panel Installer for Ubuntu 22.04 ===
-
+# === OpenVPN Auto Visit Panel Full Installer for Ubuntu 22.04 ===
 set -e
 
 PANEL_DIR="/var/www/html/vpn-visit-panel"
 
 echo "=== Updating and Installing Requirements ==="
 sudo apt update
-sudo apt install -y openvpn apache2 php php-cli php-zip curl nodejs npm
+sudo apt install -y openvpn apache2 php php-cli php-zip curl git
+
+# --------- Install Node.js v18 LTS ---------
+if ! node -v 2>/dev/null | grep -q 'v18.'; then
+    echo "=== Installing Node.js v18 LTS ==="
+    sudo apt remove -y nodejs || true
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt install -y nodejs
+else
+    echo "Node.js 18.x already installed: $(node -v)"
+fi
 
 echo "=== Creating project folder at $PANEL_DIR ==="
 sudo mkdir -p "$PANEL_DIR"
