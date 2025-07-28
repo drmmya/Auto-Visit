@@ -4,7 +4,7 @@ set -e
 PANEL_DIR="/var/www/html/vpn-visit-panel"
 CACHE_DIR="$PANEL_DIR/.puppeteer-cache"
 
-echo "=== [1] Kill Node/OpenVPN and Purge All Nodejs & Dev Libs ==="
+echo "=== [1] Clean up old Nodejs/npm/libnode-dev, Snap Chromium ==="
 sudo pkill -9 node || true
 sudo pkill -9 npm || true
 sudo pkill -9 openvpn || true
@@ -14,30 +14,27 @@ sudo apt autoremove -y
 sudo apt clean
 sudo rm -rf /usr/include/node /usr/lib/node_modules /usr/local/bin/node* /usr/local/bin/npm* /usr/local/lib/node* /usr/share/doc/nodejs
 sudo rm -rf /var/lib/dpkg/info/nodejs* /var/lib/dpkg/info/libnode-dev*
-sudo rm -rf /snap/chromium*
 sudo dpkg --configure -a
 sudo apt -f install -y
 sudo apt-mark hold libnode-dev || true
+sudo snap remove chromium || true || echo "No Snap chromium"
 
-echo "=== [2] Remove Snap Chromium if present ==="
-sudo snap remove chromium || true
-
-echo "=== [3] Install Node.js v18 LTS ==="
+echo "=== [2] Install Node.js v18 LTS (guaranteed) ==="
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt update
 sudo apt install -y nodejs
 
-echo "=== [4] Install other dependencies ==="
+echo "=== [3] Install other dependencies ==="
 sudo apt install -y openvpn apache2 php php-cli php-zip curl git
 
-echo "=== [5] Create panel & puppeteer cache directory ==="
+echo "=== [4] Setup panel and Puppeteer cache dir ==="
 sudo mkdir -p "$PANEL_DIR"
 sudo chown $USER:$USER "$PANEL_DIR"
 cd "$PANEL_DIR"
 mkdir -p "$CACHE_DIR"
 sudo chown -R www-data:www-data "$CACHE_DIR"
 
-echo "=== [6] Write admin.php ==="
+echo "=== [5] Write admin.php ==="
 cat > admin.php <<'EOF'
 <?php
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -108,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </html>
 EOF
 
-echo "=== [7] Write start.php ==="
+echo "=== [6] Write start.php ==="
 cat > start.php <<'EOF'
 <?php
 $settings = json_decode(file_get_contents('settings.json'), true);
@@ -122,15 +119,22 @@ for ($i = 0; $i < $settings['visits']; $i++) {
 ?>
 EOF
 
-echo "=== [8] Write run_visit.sh ==="
+echo "=== [7] Write run_visit.sh ==="
 cat > run_visit.sh <<'EOF'
 #!/bin/bash
+export PATH=$PATH:/usr/bin:/usr/local/bin
+
 CONFIG="$1"
 USERNAME="$2"
 PASSWORD="$3"
 URL="$4"
 LOG="visit.log"
 CACHE_DIR="./.puppeteer-cache"
+
+NODE_BIN=$(which node)
+if [ -z "$NODE_BIN" ]; then
+    NODE_BIN="/usr/bin/node"
+fi
 
 TMPPASS=$(mktemp)
 echo -e "$USERNAME\n$PASSWORD" > $TMPPASS
@@ -153,7 +157,7 @@ fi
 echo "$(date) | Connected as $IP ($COUNTRY)" >> $LOG
 
 export PUPPETEER_CACHE_DIR=$CACHE_DIR
-node puppeteer_visit.js "$URL" >> $LOG 2>&1
+$NODE_BIN puppeteer_visit.js "$URL" >> $LOG 2>&1
 
 echo "$(date) | Disconnecting VPN" >> $LOG
 sudo pkill openvpn
@@ -163,7 +167,7 @@ EOF
 
 chmod +x run_visit.sh
 
-echo "=== [9] Write puppeteer_visit.js ==="
+echo "=== [8] Write puppeteer_visit.js ==="
 cat > puppeteer_visit.js <<'EOF'
 const puppeteer = require('puppeteer');
 (async () => {
@@ -185,19 +189,19 @@ const puppeteer = require('puppeteer');
 })();
 EOF
 
-echo "=== [10] Init configs and permissions ==="
+echo "=== [9] Set permissions and initial files ==="
 mkdir -p vpn_configs
 touch visit.log
 touch settings.json
 sudo chown -R www-data:www-data "$PANEL_DIR"
 chmod -R 755 "$PANEL_DIR"
 
-echo "=== [11] Install Puppeteer and force Chromium download to cache ==="
+echo "=== [10] Install Puppeteer and force Chromium download ==="
 export PUPPETEER_CACHE_DIR=$CACHE_DIR
 npm install puppeteer --force
 npx puppeteer browsers install chrome
 
-echo "=== [12] Start apache2 ==="
+echo "=== [11] Start apache2 ==="
 sudo systemctl start apache2
 
 echo
