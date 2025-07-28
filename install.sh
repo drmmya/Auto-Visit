@@ -2,24 +2,27 @@
 set -e
 
 PANEL_DIR="/var/www/html/vpn-visit-panel"
+CACHE_DIR="$PANEL_DIR/.puppeteer-cache"
 
-echo "=== [1] Kill Node/OpenVPN and Purge All Ubuntu Node.js/Dev Libs ==="
+echo "=== [1] Kill Node/OpenVPN and Purge All Nodejs & Dev Libs ==="
 sudo pkill -9 node || true
 sudo pkill -9 npm || true
 sudo pkill -9 openvpn || true
-sudo apt remove --purge -y nodejs npm libnode-dev nodejs-doc || true
-sudo dpkg --purge nodejs npm libnode-dev nodejs-doc || true
+sudo apt remove --purge -y nodejs npm libnode-dev nodejs-doc chromium-browser || true
+sudo dpkg --purge nodejs npm libnode-dev nodejs-doc chromium-browser || true
 sudo apt autoremove -y
 sudo apt clean
 sudo rm -rf /usr/include/node /usr/lib/node_modules /usr/local/bin/node* /usr/local/bin/npm* /usr/local/lib/node* /usr/share/doc/nodejs
 sudo rm -rf /var/lib/dpkg/info/nodejs* /var/lib/dpkg/info/libnode-dev*
+sudo rm -rf /snap/chromium*
 sudo dpkg --configure -a
 sudo apt -f install -y
+sudo apt-mark hold libnode-dev || true
 
-echo "=== [2] Hold Ubuntu's libnode-dev forever ==="
-sudo apt-mark hold libnode-dev
+echo "=== [2] Remove Snap Chromium if present ==="
+sudo snap remove chromium || true
 
-echo "=== [3] Install Node.js v18 from NodeSource only ==="
+echo "=== [3] Install Node.js v18 LTS ==="
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt update
 sudo apt install -y nodejs
@@ -27,10 +30,12 @@ sudo apt install -y nodejs
 echo "=== [4] Install other dependencies ==="
 sudo apt install -y openvpn apache2 php php-cli php-zip curl git
 
-echo "=== [5] Create panel directory ==="
+echo "=== [5] Create panel & puppeteer cache directory ==="
 sudo mkdir -p "$PANEL_DIR"
 sudo chown $USER:$USER "$PANEL_DIR"
 cd "$PANEL_DIR"
+mkdir -p "$CACHE_DIR"
+sudo chown -R www-data:www-data "$CACHE_DIR"
 
 echo "=== [6] Write admin.php ==="
 cat > admin.php <<'EOF'
@@ -125,6 +130,7 @@ USERNAME="$2"
 PASSWORD="$3"
 URL="$4"
 LOG="visit.log"
+CACHE_DIR="./.puppeteer-cache"
 
 TMPPASS=$(mktemp)
 echo -e "$USERNAME\n$PASSWORD" > $TMPPASS
@@ -146,6 +152,7 @@ fi
 
 echo "$(date) | Connected as $IP ($COUNTRY)" >> $LOG
 
+export PUPPETEER_CACHE_DIR=$CACHE_DIR
 node puppeteer_visit.js "$URL" >> $LOG 2>&1
 
 echo "$(date) | Disconnecting VPN" >> $LOG
@@ -163,13 +170,7 @@ const puppeteer = require('puppeteer');
     const url = process.argv[2];
     if (!url) process.exit(1);
 
-    // Try default path first, else fallback to system Chromium if installed
-    let launchOpts = { headless: true, args: ['--no-sandbox'] };
-    const fs = require('fs');
-    if (fs.existsSync('/usr/bin/chromium-browser')) {
-        launchOpts.executablePath = '/usr/bin/chromium-browser';
-    }
-    const browser = await puppeteer.launch(launchOpts);
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
     await page.waitForTimeout(10000);
@@ -184,19 +185,17 @@ const puppeteer = require('puppeteer');
 })();
 EOF
 
-echo "=== [10] Create configs, permissions ==="
+echo "=== [10] Init configs and permissions ==="
 mkdir -p vpn_configs
 touch visit.log
 touch settings.json
 sudo chown -R www-data:www-data "$PANEL_DIR"
 chmod -R 755 "$PANEL_DIR"
 
-echo "=== [11] Install puppeteer (node module) and download Chromium ==="
+echo "=== [11] Install Puppeteer and force Chromium download to cache ==="
+export PUPPETEER_CACHE_DIR=$CACHE_DIR
 npm install puppeteer --force
-npx puppeteer browsers install chrome || true
-
-# Optionally install system Chromium for fallback
-sudo apt install -y chromium-browser || true
+npx puppeteer browsers install chrome
 
 echo "=== [12] Start apache2 ==="
 sudo systemctl start apache2
