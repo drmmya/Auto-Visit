@@ -3,13 +3,14 @@ set -e
 
 PANEL_DIR="/var/www/html/vpn-visit-panel"
 
-echo "=== [1] Fix dpkg, purge ALL Ubuntu nodejs/npm/libnode-dev ==="
+echo "=== [1] Kill Node/OpenVPN and Purge All Ubuntu Node.js/Dev Libs ==="
 sudo pkill -9 node || true
 sudo pkill -9 npm || true
 sudo pkill -9 openvpn || true
 sudo apt remove --purge -y nodejs npm libnode-dev nodejs-doc || true
 sudo dpkg --purge nodejs npm libnode-dev nodejs-doc || true
 sudo apt autoremove -y
+sudo apt clean
 sudo rm -rf /usr/include/node /usr/lib/node_modules /usr/local/bin/node* /usr/local/bin/npm* /usr/local/lib/node* /usr/share/doc/nodejs
 sudo rm -rf /var/lib/dpkg/info/nodejs* /var/lib/dpkg/info/libnode-dev*
 sudo dpkg --configure -a
@@ -23,7 +24,7 @@ curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt update
 sudo apt install -y nodejs
 
-echo "=== [4] Install all other dependencies ==="
+echo "=== [4] Install other dependencies ==="
 sudo apt install -y openvpn apache2 php php-cli php-zip curl git
 
 echo "=== [5] Create panel directory ==="
@@ -162,7 +163,13 @@ const puppeteer = require('puppeteer');
     const url = process.argv[2];
     if (!url) process.exit(1);
 
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+    // Try default path first, else fallback to system Chromium if installed
+    let launchOpts = { headless: true, args: ['--no-sandbox'] };
+    const fs = require('fs');
+    if (fs.existsSync('/usr/bin/chromium-browser')) {
+        launchOpts.executablePath = '/usr/bin/chromium-browser';
+    }
+    const browser = await puppeteer.launch(launchOpts);
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
     await page.waitForTimeout(10000);
@@ -184,8 +191,12 @@ touch settings.json
 sudo chown -R www-data:www-data "$PANEL_DIR"
 chmod -R 755 "$PANEL_DIR"
 
-echo "=== [11] Install puppeteer (node module) ==="
-npm install puppeteer
+echo "=== [11] Install puppeteer (node module) and download Chromium ==="
+npm install puppeteer --force
+npx puppeteer browsers install chrome || true
+
+# Optionally install system Chromium for fallback
+sudo apt install -y chromium-browser || true
 
 echo "=== [12] Start apache2 ==="
 sudo systemctl start apache2
